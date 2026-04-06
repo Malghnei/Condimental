@@ -1,0 +1,126 @@
+.app {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 24px 16px 40px;
+  display: grid;
+  gap: 18px;
+}
+
+.header h1 {
+  margin: 0 0 8px;
+}
+
+.header p {
+  margin: 0;
+  color: #4b5563;
+}
+
+.card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.consent p {
+  margin-bottom: 12px;
+}
+
+.cameraFrame {
+  width: 100%;
+  min-height: 280px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #111827;
+  display: grid;
+  place-items: center;
+}
+
+.cameraFrame video,
+.cameraFrame img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+button {
+  border: 1px solid #111827;
+  background: #111827;
+  color: #ffffff;
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.actions button:last-child {
+  background: #ffffff;
+  color: #111827;
+}
+
+.status {
+  margin-top: 10px;
+  color: #1d4ed8;
+}
+
+.error {
+  margin-top: 10px;
+  color: #b91c1c;
+}
+
+.warning {
+  color: #92400e;
+}
+
+.comparison {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.comparison figure {
+  margin: 0;
+}
+
+.comparison figcaption {
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+.comparison img {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+}
+
+.placeholder {
+  min-height: 220px;
+  border: 1px dashed #9ca3af;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  color: #6b7280;
+}
+
+.review {
+  margin-top: 14px;
+  display: grid;
+  gap: 8px;
+}
+
+@media (max-width: 860px) {
+  .comparison {
+    grid-template-columns: 1fr;
+  }
+}

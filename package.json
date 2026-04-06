@@ -1,0 +1,29 @@
+{
+  "name": "condimental",
+  "version": "0.1.0",
+  "description": "Condiments meet AI",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev:frontend": "npm run dev --workspace frontend",
+    "dev:backend": "npm run dev --workspace backend",
+    "build": "npm run build --workspaces",
+    "test": "npm run test --workspaces",
+    "lint": "npm run lint --workspaces"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Malghnei/Condimental.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Malghnei/Condimental/issues"
+  },
+  "homepage": "https://github.com/Malghnei/Condimental#readme",
+  "workspaces": [
+    "frontend",
+    "backend"
+  ]
+}
