@@ -11,6 +11,7 @@
     "lint": "echo \"No backend lint configured\""
   },
   "dependencies": {
+    "@huggingface/inference": "^4.13.15",
     "@google/genai": "^1.30.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",

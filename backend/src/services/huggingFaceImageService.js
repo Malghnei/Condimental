@@ -1,135 +1,68 @@
+import { InferenceClient } from "@huggingface/inference";
 import { HttpError } from "../errors/httpErrors.js";
 
 const mayoPrompt =
   "Add a large, realistic, and shiny dollop of mayonnaise directly on top of the main subject of this image.";
 
-/**
- * Builds the Hugging Face Inference Providers URL for a model.
- * Do not encode the full model id: `org/name` must stay as two path segments
- * (`.../models/timbrooks/instruct-pix2pix`). Using encodeURIComponent turns `/`
- * into %2F and the server resolves a different route (often 404).
- */
-function buildInferenceUrl(modelId) {
-  const trimmed = modelId.trim().replace(/^\/+/, "");
-  if (!trimmed || trimmed.includes("..")) {
-    throw new HttpError({
-      statusCode: 502,
-      publicMessage: "Image generation failed.",
-      code: "IMAGE_API_FAILED",
-      cause: { detail: "Invalid HF_IMAGE_MODEL" }
-    });
-  }
-  return `https://router.huggingface.co/hf-inference/models/${trimmed}`;
-}
-
-/**
- * Parses HF inference response: binary image bytes or JSON-wrapped image data.
- */
-async function parseImageResponse(response) {
-  const contentType = response.headers.get("content-type") ?? "";
-
-  if (contentType.includes("application/json")) {
-    const data = await response.json();
-    if (data?.error) {
-      return { error: typeof data.error === "string" ? data.error : JSON.stringify(data.error) };
-    }
-    // Some pipelines return { image: "base64..." } or nested blob
-    const base64 =
-      typeof data?.image === "string"
-        ? data.image
-        : typeof data?.generated_image === "string"
-          ? data.generated_image
-          : Array.isArray(data) && typeof data[0]?.image === "string"
-            ? data[0].image
-            : null;
-    if (base64) {
-      return { base64: base64.replace(/^data:image\/\w+;base64,/, "") };
-    }
-    return { error: "IMAGE_RESPONSE_UNEXPECTED_JSON" };
-  }
-
-  const buffer = await response.arrayBuffer();
-  if (!buffer.byteLength) {
-    return { error: "IMAGE_RESPONSE_EMPTY_BODY" };
-  }
-  return { base64: Buffer.from(buffer).toString("base64") };
-}
-
 export function createHuggingFaceImageService(env) {
+  const hf = new InferenceClient(env.hfApiKey);
+
   async function generateMayonnaiseImage({
     sourceImageBase64,
     sourceImageMimeType,
     maskBase64: _maskBase64
   }) {
-    // instruct-pix2pix is instruction-based; mask is unused (kept for API compatibility).
     void _maskBase64;
 
-    const url = buildInferenceUrl(env.hfImageModel);
-    const body = JSON.stringify({
-      inputs: sourceImageBase64,
-      parameters: {
-        prompt: mayoPrompt
-      }
-    });
-
-    let response;
-    try {
-      response = await fetch(url, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${env.hfApiKey}`,
-          "Content-Type": "application/json"
-        },
-        body
-      });
-    } catch (error) {
-      throw new HttpError({
-        statusCode: 502,
-        publicMessage: "Image generation failed.",
-        code: "IMAGE_API_UNAVAILABLE",
-        cause: error
-      });
-    }
-
-    const errorText = async () => {
-      try {
-        return (await response.text()).slice(0, 800);
-      } catch {
-        return "";
-      }
-    };
-
-    if (!response.ok) {
-      const snippet = await errorText();
+    const imageBuffer = Buffer.from(sourceImageBase64, "base64");
+    if (!imageBuffer.length) {
       throw new HttpError({
         statusCode: 502,
         publicMessage: "Image generation failed.",
         code: "IMAGE_API_FAILED",
-        cause: { status: response.status, body: snippet }
+        cause: { detail: "Empty source image" }
       });
     }
 
-    const parsed = await parseImageResponse(response);
+    const mimeType = sourceImageMimeType || "image/png";
+    const imageBlob = new Blob([imageBuffer], { type: mimeType });
 
-    if (parsed.error) {
+    try {
+      const resultBlob = await hf.imageToImage({
+        model: env.hfImageModel,
+        inputs: imageBlob,
+        parameters: {
+          prompt: mayoPrompt,
+          image_guidance_scale: 1.5,
+          guidance_scale: 7
+        }
+      });
+
+      if (!(resultBlob instanceof Blob)) {
+        throw new HttpError({
+          statusCode: 502,
+          publicMessage: "Image generation failed.",
+          code: "IMAGE_RESPONSE_EMPTY",
+          cause: { detail: "Expected Blob from imageToImage" }
+        });
+      }
+
+      const arrayBuffer = await resultBlob.arrayBuffer();
+      return Buffer.from(arrayBuffer).toString("base64");
+    } catch (error) {
+      if (error instanceof HttpError) {
+        throw error;
+      }
       throw new HttpError({
         statusCode: 502,
         publicMessage: "Image generation failed.",
-        code: "IMAGE_RESPONSE_EMPTY",
-        cause: { detail: parsed.error }
+        code: "IMAGE_API_FAILED",
+        cause: {
+          message: error?.message ?? String(error),
+          name: error?.name
+        }
       });
     }
-
-    if (!parsed.base64) {
-      throw new HttpError({
-        statusCode: 502,
-        publicMessage: "Image generation failed.",
-        code: "IMAGE_RESPONSE_EMPTY",
-        cause: { detail: "No image bytes in response" }
-      });
-    }
-
-    return parsed.base64;
   }
 
   return {
