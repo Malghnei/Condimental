@@ -4,12 +4,13 @@ const mayoPrompt =
   "Add a large, realistic, and shiny dollop of mayonnaise directly on top of the main subject of this image.";
 
 /**
- * Builds the Hugging Face Inference API URL for a model.
- * Uses the public inference endpoint; router URL can be swapped via env if needed.
+ * Builds the Hugging Face Inference Providers URL for a model.
+ * The legacy api-inference.huggingface.co host returns 410; use the router instead.
+ * @see https://huggingface.co/docs/api-inference
  */
 function buildInferenceUrl(modelId) {
   const encoded = encodeURIComponent(modelId);
-  return `https://api-inference.huggingface.co/models/${encoded}`;
+  return `https://router.huggingface.co/hf-inference/models/${encoded}`;
 }
 
 /**
