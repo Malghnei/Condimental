@@ -31,11 +31,16 @@ function extractText(candidates) {
 }
 
 function extractImageInlineData(candidates) {
-  const parts = candidates?.[0]?.content?.parts ?? [];
-  const imagePart = parts.find(
-    (part) => part.inlineData?.mimeType?.startsWith("image/")
-  );
-  return imagePart?.inlineData?.data ?? null;
+  for (const candidate of candidates ?? []) {
+    const parts = candidate?.content?.parts ?? [];
+    const imagePart = parts.find(
+      (part) => part.inlineData?.mimeType?.startsWith("image/")
+    );
+    if (imagePart?.inlineData?.data) {
+      return imagePart.inlineData.data;
+    }
+  }
+  return null;
 }
 
 function parseVisionJson(rawText) {
@@ -53,6 +58,22 @@ function parseVisionJson(rawText) {
       : null;
   const payload = asJsonCodeBlock ?? asCodeBlock ?? extractedObject ?? trimmed;
   return JSON.parse(payload);
+}
+
+function summarizeCandidates(candidates) {
+  return (candidates ?? []).map((candidate, index) => {
+    const parts = candidate?.content?.parts ?? [];
+    return {
+      index,
+      finishReason: candidate?.finishReason ?? null,
+      safetyRatings: candidate?.safetyRatings ?? [],
+      partKinds: parts.map((part) => {
+        if (typeof part?.text === "string") return "text";
+        if (part?.inlineData?.mimeType) return `inline:${part.inlineData.mimeType}`;
+        return "unknown";
+      })
+    };
+  });
 }
 
 export function createGeminiService(env) {
@@ -191,10 +212,20 @@ export function createGeminiService(env) {
     }
 
     if (!response.ok) {
+      let apiErrorBody = "";
+      try {
+        apiErrorBody = await response.text();
+      } catch {
+        apiErrorBody = "";
+      }
       throw new HttpError({
         statusCode: 502,
         publicMessage: "Image generation failed.",
-        code: "IMAGE_API_FAILED"
+        code: "IMAGE_API_FAILED",
+        cause: {
+          status: response.status,
+          body: apiErrorBody.slice(0, 800)
+        }
       });
     }
 
@@ -216,7 +247,10 @@ export function createGeminiService(env) {
       throw new HttpError({
         statusCode: 502,
         publicMessage: "Image generation failed.",
-        code: "IMAGE_RESPONSE_EMPTY"
+        code: "IMAGE_RESPONSE_EMPTY",
+        cause: {
+          candidates: summarizeCandidates(result.candidates)
+        }
       });
     }
 

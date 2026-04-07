@@ -45,6 +45,12 @@ export function createEvaluateMayoUseCase({ geminiService }) {
         warning: null
       };
     } catch (error) {
+      // Keep partial success UX, but surface generation diagnostics in server logs.
+      console.warn("Image generation fallback triggered", {
+        code: error?.code ?? null,
+        message: error?.message ?? "Unknown image generation error",
+        cause: error?.cause ?? null
+      });
       return {
         status: "partial",
         originalImageBase64: normalizedImageBase64,
