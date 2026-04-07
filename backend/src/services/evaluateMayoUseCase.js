@@ -7,7 +7,10 @@ import {
 } from "../utils/image.js";
 import { buildInpaintMask } from "./maskService.js";
 
-export function createEvaluateMayoUseCase({ geminiService }) {
+export function createEvaluateMayoUseCase({
+  geminiVisionService,
+  imageGenerationService
+}) {
   return async function evaluateMayo({ imageBase64 }) {
     const normalizedImageBase64 = stripDataUrlPrefix(imageBase64);
     const originalImageBuffer = decodeBase64Image(normalizedImageBase64);
@@ -18,7 +21,7 @@ export function createEvaluateMayoUseCase({ geminiService }) {
 
     const dimensions = await getImageDimensions(originalImageBuffer);
 
-    const vision = await geminiService.analyzeVision(
+    const vision = await geminiVisionService.analyzeVision(
       normalizedImageBase64,
       sourceImageMimeType
     );
@@ -31,11 +34,12 @@ export function createEvaluateMayoUseCase({ geminiService }) {
     });
 
     try {
-      const augmentedImageBase64 = await geminiService.generateMayonnaiseImage({
-        sourceImageBase64: normalizedImageBase64,
-        sourceImageMimeType,
-        maskBase64: maskBuffer.toString("base64")
-      });
+      const augmentedImageBase64 =
+        await imageGenerationService.generateMayonnaiseImage({
+          sourceImageBase64: normalizedImageBase64,
+          sourceImageMimeType,
+          maskBase64: maskBuffer.toString("base64")
+        });
 
       return {
         status: "complete",

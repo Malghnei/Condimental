@@ -6,6 +6,7 @@ import { isHttpError } from "../errors/httpErrors.js";
 import { createEvaluateMayoRoute } from "../routes/evaluateMayoRoute.js";
 import { createEvaluateMayoUseCase } from "../services/evaluateMayoUseCase.js";
 import { createGeminiService } from "../services/geminiService.js";
+import { createHuggingFaceImageService } from "../services/huggingFaceImageService.js";
 
 function splitOrigins(frontendOrigin) {
   return frontendOrigin.split(",").map((value) => value.trim());
@@ -13,7 +14,8 @@ function splitOrigins(frontendOrigin) {
 
 export function createApp({
   env,
-  geminiService = createGeminiService(env),
+  geminiVisionService = createGeminiService(env),
+  imageGenerationService = createHuggingFaceImageService(env),
   rateLimitMax = 15
 }) {
   const app = express();
@@ -42,7 +44,10 @@ export function createApp({
     })
   );
 
-  const evaluateMayoUseCase = createEvaluateMayoUseCase({ geminiService });
+  const evaluateMayoUseCase = createEvaluateMayoUseCase({
+    geminiVisionService,
+    imageGenerationService
+  });
   const evaluateMayoController = createEvaluateMayoController({
     evaluateMayoUseCase
   });

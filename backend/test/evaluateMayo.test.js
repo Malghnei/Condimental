@@ -10,34 +10,43 @@ const env = {
   frontendOrigin: "http://localhost:5173",
   geminiApiKey: "test-key",
   geminiVisionModel: "vision-model",
-  geminiImageModel: "image-model"
+  hfApiKey: "hf-test-key",
+  hfImageModel: "timbrooks/instruct-pix2pix"
 };
 
-function createMockGeminiService({
+function createMockServices({
   failVision = false,
-  failGeneration = false
+  failGeneration = false,
+  invalidGenerationPayload = false
 } = {}) {
   return {
-    async analyzeVision() {
-      if (failVision) {
-        throw new HttpError({
-          statusCode: 502,
-          publicMessage: "Vision analysis failed.",
-          code: "VISION_API_FAILED"
-        });
+    geminiVisionService: {
+      async analyzeVision() {
+        if (failVision) {
+          throw new HttpError({
+            statusCode: 502,
+            publicMessage: "Vision analysis failed.",
+            code: "VISION_API_FAILED"
+          });
+        }
+        return {
+          identified_object: "burger",
+          mayo_score: 88,
+          review: "Great mayo candidate.",
+          bounding_box: { x: 0.1, y: 0.1, width: 0.6, height: 0.6 }
+        };
       }
-      return {
-        identified_object: "burger",
-        mayo_score: 88,
-        review: "Great mayo candidate.",
-        bounding_box: { x: 0.1, y: 0.1, width: 0.6, height: 0.6 }
-      };
     },
-    async generateMayonnaiseImage() {
-      if (failGeneration) {
-        throw new Error("Image API failed (500): generation error");
+    imageGenerationService: {
+      async generateMayonnaiseImage() {
+        if (failGeneration) {
+          throw new Error("Image API failed (500): generation error");
+        }
+        if (invalidGenerationPayload) {
+          return 12345;
+        }
+        return onePixelPngBase64;
       }
-      return onePixelPngBase64;
     }
   };
 }
@@ -46,7 +55,7 @@ describe("POST /api/evaluate-mayo", () => {
   it("returns full response on successful vision + generation", async () => {
     const app = createApp({
       env,
-      geminiService: createMockGeminiService()
+      ...createMockServices()
     });
 
     const response = await request(app).post("/api/evaluate-mayo").send({
@@ -62,7 +71,7 @@ describe("POST /api/evaluate-mayo", () => {
   it("returns partial response when generation fails", async () => {
     const app = createApp({
       env,
-      geminiService: createMockGeminiService({ failGeneration: true })
+      ...createMockServices({ failGeneration: true })
     });
 
     const response = await request(app).post("/api/evaluate-mayo").send({
@@ -80,7 +89,7 @@ describe("POST /api/evaluate-mayo", () => {
   it("returns 502 when vision fails", async () => {
     const app = createApp({
       env,
-      geminiService: createMockGeminiService({ failVision: true })
+      ...createMockServices({ failVision: true })
     });
 
     const response = await request(app).post("/api/evaluate-mayo").send({
@@ -95,7 +104,7 @@ describe("POST /api/evaluate-mayo", () => {
   it("returns 400 when request schema is invalid", async () => {
     const app = createApp({
       env,
-      geminiService: createMockGeminiService()
+      ...createMockServices()
     });
 
     const response = await request(app).post("/api/evaluate-mayo").send({
@@ -109,19 +118,7 @@ describe("POST /api/evaluate-mayo", () => {
   it("returns 500 when response schema is invalid", async () => {
     const app = createApp({
       env,
-      geminiService: {
-        async analyzeVision() {
-          return {
-            identified_object: "burger",
-            mayo_score: 88,
-            review: "Great mayo candidate.",
-            bounding_box: { x: 0.1, y: 0.1, width: 0.6, height: 0.6 }
-          };
-        },
-        async generateMayonnaiseImage() {
-          return 12345;
-        }
-      }
+      ...createMockServices({ invalidGenerationPayload: true })
     });
 
     const response = await request(app).post("/api/evaluate-mayo").send({
@@ -136,7 +133,7 @@ describe("POST /api/evaluate-mayo", () => {
   it("returns 413 when payload is oversized", async () => {
     const app = createApp({
       env,
-      geminiService: createMockGeminiService()
+      ...createMockServices()
     });
     const hugeImage = "A".repeat(11 * 1024 * 1024);
 
@@ -150,7 +147,7 @@ describe("POST /api/evaluate-mayo", () => {
   it("returns 429 when rate limit is exceeded", async () => {
     const app = createApp({
       env,
-      geminiService: createMockGeminiService(),
+      ...createMockServices(),
       rateLimitMax: 1
     });
 
