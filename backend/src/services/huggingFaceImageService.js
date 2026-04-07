@@ -5,12 +5,21 @@ const mayoPrompt =
 
 /**
  * Builds the Hugging Face Inference Providers URL for a model.
- * The legacy api-inference.huggingface.co host returns 410; use the router instead.
- * @see https://huggingface.co/docs/api-inference
+ * Do not encode the full model id: `org/name` must stay as two path segments
+ * (`.../models/timbrooks/instruct-pix2pix`). Using encodeURIComponent turns `/`
+ * into %2F and the server resolves a different route (often 404).
  */
 function buildInferenceUrl(modelId) {
-  const encoded = encodeURIComponent(modelId);
-  return `https://router.huggingface.co/hf-inference/models/${encoded}`;
+  const trimmed = modelId.trim().replace(/^\/+/, "");
+  if (!trimmed || trimmed.includes("..")) {
+    throw new HttpError({
+      statusCode: 502,
+      publicMessage: "Image generation failed.",
+      code: "IMAGE_API_FAILED",
+      cause: { detail: "Invalid HF_IMAGE_MODEL" }
+    });
+  }
+  return `https://router.huggingface.co/hf-inference/models/${trimmed}`;
 }
 
 /**
