@@ -1,6 +1,7 @@
 import request from "supertest";
 import { describe, expect, it } from "vitest";
 import { createApp } from "../src/app/createApp.js";
+import { HttpError } from "../src/errors/httpErrors.js";
 
 const onePixelPngBase64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+X5QAAAABJRU5ErkJggg==";
@@ -19,7 +20,11 @@ function createMockGeminiService({
   return {
     async analyzeVision() {
       if (failVision) {
-        throw new Error("Vision API failed (503): unavailable");
+        throw new HttpError({
+          statusCode: 502,
+          publicMessage: "Vision analysis failed.",
+          code: "VISION_API_FAILED"
+        });
       }
       return {
         identified_object: "burger",
@@ -67,7 +72,9 @@ describe("POST /api/evaluate-mayo", () => {
     expect(response.statusCode).toBe(200);
     expect(response.body.status).toBe("partial");
     expect(response.body.augmentedImageBase64).toBeNull();
-    expect(response.body.warning).toContain("Image API failed");
+    expect(response.body.warning).toBe(
+      "Image generation failed after successful vision analysis."
+    );
   });
 
   it("returns 502 when vision fails", async () => {
@@ -82,6 +89,48 @@ describe("POST /api/evaluate-mayo", () => {
 
     expect(response.statusCode).toBe(502);
     expect(response.body.message).toBe("Vision analysis failed.");
+    expect(response.body.code).toBe("VISION_API_FAILED");
+  });
+
+  it("returns 400 when request schema is invalid", async () => {
+    const app = createApp({
+      env,
+      geminiService: createMockGeminiService()
+    });
+
+    const response = await request(app).post("/api/evaluate-mayo").send({
+      imageBase64: "too-short"
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.body.message).toBe("Invalid request schema.");
+  });
+
+  it("returns 500 when response schema is invalid", async () => {
+    const app = createApp({
+      env,
+      geminiService: {
+        async analyzeVision() {
+          return {
+            identified_object: "burger",
+            mayo_score: 88,
+            review: "Great mayo candidate.",
+            bounding_box: { x: 0.1, y: 0.1, width: 0.6, height: 0.6 }
+          };
+        },
+        async generateMayonnaiseImage() {
+          return 12345;
+        }
+      }
+    });
+
+    const response = await request(app).post("/api/evaluate-mayo").send({
+      imageBase64: onePixelPngBase64
+    });
+
+    expect(response.statusCode).toBe(500);
+    expect(response.body.message).toBe("Internal response validation failed.");
+    expect(response.body.code).toBe("RESPONSE_SCHEMA_INVALID");
   });
 
   it("returns 413 when payload is oversized", async () => {

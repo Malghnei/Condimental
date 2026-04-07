@@ -1,5 +1,13 @@
 import sharp from "sharp";
 
+const formatToMime = {
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+  gif: "image/gif"
+};
+const supportedMimeTypes = new Set(Object.values(formatToMime));
+
 export function stripDataUrlPrefix(base64OrDataUrl) {
   const marker = "base64,";
   const index = base64OrDataUrl.indexOf(marker);
@@ -11,6 +19,37 @@ export function stripDataUrlPrefix(base64OrDataUrl) {
 
 export function decodeBase64Image(base64OrDataUrl) {
   return Buffer.from(stripDataUrlPrefix(base64OrDataUrl), "base64");
+}
+
+export function getMimeTypeFromDataUrl(base64OrDataUrl) {
+  const match = base64OrDataUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,/);
+  if (!match) {
+    return null;
+  }
+  return match[1].toLowerCase();
+}
+
+export async function inferImageMimeType(imageBuffer) {
+  const metadata = await sharp(imageBuffer).metadata();
+  const mimeType = formatToMime[metadata.format];
+  if (!mimeType) {
+    throw new Error("Unsupported image format.");
+  }
+  return mimeType;
+}
+
+export async function resolveImageMimeType({ rawInput, imageBuffer }) {
+  const dataUrlMimeType = getMimeTypeFromDataUrl(rawInput);
+  if (dataUrlMimeType) {
+    if (dataUrlMimeType === "image/jpg") {
+      return "image/jpeg";
+    }
+    if (supportedMimeTypes.has(dataUrlMimeType)) {
+      return dataUrlMimeType;
+    }
+    throw new Error("Unsupported image MIME type.");
+  }
+  return inferImageMimeType(imageBuffer);
 }
 
 export async function getImageDimensions(imageBuffer) {

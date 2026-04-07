@@ -2,6 +2,7 @@ import cors from "cors";
 import express from "express";
 import rateLimit from "express-rate-limit";
 import { createEvaluateMayoController } from "../controllers/evaluateMayoController.js";
+import { isHttpError } from "../errors/httpErrors.js";
 import { createEvaluateMayoRoute } from "../routes/evaluateMayoRoute.js";
 import { createEvaluateMayoUseCase } from "../services/evaluateMayoUseCase.js";
 import { createGeminiService } from "../services/geminiService.js";
@@ -63,9 +64,15 @@ export function createApp({
       });
     }
 
+    if (isHttpError(error)) {
+      return res.status(error.statusCode).json({
+        message: error.publicMessage,
+        code: error.code
+      });
+    }
+
     res.status(500).json({
-      message: "Unhandled application error.",
-      details: error instanceof Error ? error.message : "Unknown error"
+      message: "Unhandled application error."
     });
   });
 

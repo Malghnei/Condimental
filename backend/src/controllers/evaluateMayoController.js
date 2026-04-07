@@ -3,32 +3,52 @@ import {
   evaluateRequestSchema,
   evaluateResponseSchema
 } from "../domain/schemas.js";
+import { isHttpError } from "../errors/httpErrors.js";
 
 export function createEvaluateMayoController({ evaluateMayoUseCase }) {
   return async function evaluateMayoController(req, res) {
+    let input;
     try {
-      const input = evaluateRequestSchema.parse(req.body);
-      const output = await evaluateMayoUseCase(input);
+      input = evaluateRequestSchema.parse(req.body);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return res.status(400).json({
+          message: "Invalid request schema.",
+          issues: error.issues
+        });
+      }
+      return res.status(500).json({
+        message: "Unexpected backend error."
+      });
+    }
+
+    let output;
+    try {
+      output = await evaluateMayoUseCase(input);
+    } catch (error) {
+      if (isHttpError(error)) {
+        return res.status(error.statusCode).json({
+          message: error.publicMessage,
+          code: error.code
+        });
+      }
+      return res.status(500).json({
+        message: "Unexpected backend error."
+      });
+    }
+
+    try {
       const validatedOutput = evaluateResponseSchema.parse(output);
       return res.status(200).json(validatedOutput);
     } catch (error) {
       if (error instanceof ZodError) {
-        return res.status(400).json({
-          message: "Invalid request or response schema.",
-          issues: error.issues
+        return res.status(500).json({
+          message: "Internal response validation failed.",
+          code: "RESPONSE_SCHEMA_INVALID"
         });
       }
-
-      if (error instanceof Error && error.message.includes("Vision API failed")) {
-        return res.status(502).json({
-          message: "Vision analysis failed.",
-          details: error.message
-        });
-      }
-
       return res.status(500).json({
-        message: "Unexpected backend error.",
-        details: error instanceof Error ? error.message : "Unknown error"
+        message: "Unexpected backend error."
       });
     }
   };

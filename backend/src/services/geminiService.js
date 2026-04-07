@@ -1,4 +1,5 @@
 import { visionResultSchema } from "../domain/schemas.js";
+import { HttpError } from "../errors/httpErrors.js";
 
 const visionPrompt = `
 Analyze the main subject in this image for culinary mayonnaise compatibility.
@@ -39,84 +40,184 @@ function extractImageInlineData(candidates) {
 
 function parseVisionJson(rawText) {
   const trimmed = rawText.trim();
-  const asCodeBlock = trimmed.match(/```json([\s\S]*?)```/i)?.[1]?.trim();
-  const payload = asCodeBlock ?? trimmed;
+  if (!trimmed) {
+    throw new Error("Vision response text is empty.");
+  }
+  const asJsonCodeBlock = trimmed.match(/```json([\s\S]*?)```/i)?.[1]?.trim();
+  const asCodeBlock = trimmed.match(/```([\s\S]*?)```/i)?.[1]?.trim();
+  const objectStart = trimmed.indexOf("{");
+  const objectEnd = trimmed.lastIndexOf("}");
+  const extractedObject =
+    objectStart >= 0 && objectEnd > objectStart
+      ? trimmed.slice(objectStart, objectEnd + 1)
+      : null;
+  const payload = asJsonCodeBlock ?? asCodeBlock ?? extractedObject ?? trimmed;
   return JSON.parse(payload);
 }
 
 export function createGeminiService(env) {
-  async function analyzeVision(imageBase64) {
-    const response = await fetch(buildEndpoint(env.geminiVisionModel, env.geminiApiKey), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [
-          {
-            role: "user",
-            parts: [
-              { text: visionPrompt },
-              { inlineData: { mimeType: "image/jpeg", data: imageBase64 } }
-            ]
-          }
-        ],
-        generationConfig: {
-          responseMimeType: "application/json"
+  async function analyzeVision(imageBase64, imageMimeType) {
+    let response;
+    try {
+      response = await fetch(
+        buildEndpoint(env.geminiVisionModel, env.geminiApiKey),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [
+              {
+                role: "user",
+                parts: [
+                  { text: visionPrompt },
+                  { inlineData: { mimeType: imageMimeType, data: imageBase64 } }
+                ]
+              }
+            ],
+            generationConfig: {
+              responseMimeType: "application/json"
+            }
+          })
         }
-      })
-    });
-
-    if (!response.ok) {
-      const details = await response.text();
-      throw new Error(`Vision API failed (${response.status}): ${details}`);
+      );
+    } catch (error) {
+      throw new HttpError({
+        statusCode: 502,
+        publicMessage: "Vision analysis failed.",
+        code: "VISION_API_UNAVAILABLE",
+        cause: error
+      });
     }
 
-    const result = await response.json();
+    if (!response.ok) {
+      throw new HttpError({
+        statusCode: 502,
+        publicMessage: "Vision analysis failed.",
+        code: "VISION_API_FAILED"
+      });
+    }
+
+    let result;
+    try {
+      result = await response.json();
+    } catch (error) {
+      throw new HttpError({
+        statusCode: 502,
+        publicMessage: "Vision analysis failed.",
+        code: "VISION_RESPONSE_INVALID_JSON",
+        cause: error
+      });
+    }
+
     const text = extractText(result.candidates);
-    const parsed = parseVisionJson(text);
-    return visionResultSchema.parse(parsed);
+    if (!text) {
+      throw new HttpError({
+        statusCode: 502,
+        publicMessage: "Vision analysis failed.",
+        code: "VISION_RESPONSE_EMPTY"
+      });
+    }
+
+    let parsed;
+    try {
+      parsed = parseVisionJson(text);
+    } catch (error) {
+      throw new HttpError({
+        statusCode: 502,
+        publicMessage: "Vision analysis failed.",
+        code: "VISION_RESPONSE_MALFORMED",
+        cause: error
+      });
+    }
+
+    try {
+      return visionResultSchema.parse(parsed);
+    } catch (error) {
+      throw new HttpError({
+        statusCode: 502,
+        publicMessage: "Vision analysis failed.",
+        code: "VISION_RESPONSE_SCHEMA_INVALID",
+        cause: error
+      });
+    }
   }
 
-  async function generateMayonnaiseImage({ sourceImageBase64, maskBase64 }) {
-    const response = await fetch(buildEndpoint(env.geminiImageModel, env.geminiApiKey), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [
-          {
-            role: "user",
-            parts: [
-              { text: mayoPrompt },
+  async function generateMayonnaiseImage({
+    sourceImageBase64,
+    sourceImageMimeType,
+    maskBase64
+  }) {
+    let response;
+    try {
+      response = await fetch(
+        buildEndpoint(env.geminiImageModel, env.geminiApiKey),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [
               {
-                inlineData: {
-                  mimeType: "image/png",
-                  data: sourceImageBase64
-                }
-              },
-              {
-                inlineData: {
-                  mimeType: "image/png",
-                  data: maskBase64
-                }
+                role: "user",
+                parts: [
+                  { text: mayoPrompt },
+                  {
+                    inlineData: {
+                      mimeType: sourceImageMimeType,
+                      data: sourceImageBase64
+                    }
+                  },
+                  {
+                    inlineData: {
+                      mimeType: "image/png",
+                      data: maskBase64
+                    }
+                  }
+                ]
               }
-            ]
-          }
-        ],
-        generationConfig: {
-          responseModalities: ["TEXT", "IMAGE"]
+            ],
+            generationConfig: {
+              responseModalities: ["TEXT", "IMAGE"]
+            }
+          })
         }
-      })
-    });
-
-    if (!response.ok) {
-      const details = await response.text();
-      throw new Error(`Image API failed (${response.status}): ${details}`);
+      );
+    } catch (error) {
+      throw new HttpError({
+        statusCode: 502,
+        publicMessage: "Image generation failed.",
+        code: "IMAGE_API_UNAVAILABLE",
+        cause: error
+      });
     }
 
-    const result = await response.json();
+    if (!response.ok) {
+      throw new HttpError({
+        statusCode: 502,
+        publicMessage: "Image generation failed.",
+        code: "IMAGE_API_FAILED"
+      });
+    }
+
+    let result;
+    try {
+      result = await response.json();
+    } catch (error) {
+      throw new HttpError({
+        statusCode: 502,
+        publicMessage: "Image generation failed.",
+        code: "IMAGE_RESPONSE_INVALID_JSON",
+        cause: error
+      });
+    }
+
     const generatedBase64 = extractImageInlineData(result.candidates);
 
     if (!generatedBase64) {
-      throw new Error("Image API did not return generated image data.");
+      throw new HttpError({
+        statusCode: 502,
+        publicMessage: "Image generation failed.",
+        code: "IMAGE_RESPONSE_EMPTY"
+      });
     }
 
     return generatedBase64;
