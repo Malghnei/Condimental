@@ -7,7 +7,7 @@ Condimental is a webcam-based demo app that:
 - captures a frame in a React frontend,
 - runs Gemini Vision analysis for object + mayo score + review + bounding box,
 - generates a mask in memory with `sharp`,
-- requests Gemini image generation for mayonnaise inpainting,
+- requests Hugging Face image generation (`timbrooks/instruct-pix2pix`) for mayonnaise-style editing,
 - returns side-by-side original and augmented results.
 
 ## Project Structure
@@ -21,7 +21,8 @@ Condimental is a webcam-based demo app that:
 
 - Node.js 20+
 - npm 10+
-- Gemini API key
+- Gemini API key (vision)
+- Hugging Face API token with Inference API access (image generation)
 
 ## Environment Variables
 
@@ -30,9 +31,10 @@ Create `backend/.env`:
 ```bash
 PORT=3001
 FRONTEND_ORIGIN=http://localhost:5173
-GEMINI_API_KEY=your_key_here
+GEMINI_API_KEY=your_gemini_key_here
 GEMINI_VISION_MODEL=gemini-2.5-flash
-GEMINI_IMAGE_MODEL=gemini-2.5-flash-image-preview
+HF_API_KEY=your_huggingface_token_here
+HF_IMAGE_MODEL=timbrooks/instruct-pix2pix
 ```
 
 Optional for frontend (`frontend/.env`):
@@ -127,7 +129,10 @@ Response body (`status: complete | partial`):
 ## Troubleshooting
 
 - **`Vision analysis failed.`**  
-  Verify `GEMINI_API_KEY` and model names in `backend/.env`.
+  Verify `GEMINI_API_KEY` and `GEMINI_VISION_MODEL` in `backend/.env`.
+
+- **`Image generation failed` / partial result with no augmented image**  
+  Verify `HF_API_KEY` and that the account can call Inference API for `HF_IMAGE_MODEL` (default `timbrooks/instruct-pix2pix`). Cold-start or rate limits may require a retry.
 
 - **CORS errors in browser console**  
   Confirm `FRONTEND_ORIGIN` exactly matches your frontend origin.

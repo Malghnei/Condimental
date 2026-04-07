@@ -50,9 +50,11 @@ Partial response when generation fails:
       "height": 0.6
     }
   },
-  "warning": "Image API failed ..."
+  "warning": "Image generation failed after successful vision analysis."
 }
 ```
+
+Image generation uses the Hugging Face Inference API (`timbrooks/instruct-pix2pix` by default). The mask built server-side is not sent to that model; editing is driven by a fixed text instruction plus the source image.
 
 Error responses:
 

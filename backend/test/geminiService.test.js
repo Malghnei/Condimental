@@ -1,11 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { HttpError } from "../src/errors/httpErrors.js";
 import { createGeminiService } from "../src/services/geminiService.js";
 
 const env = {
   geminiApiKey: "test-key",
-  geminiVisionModel: "vision-model",
-  geminiImageModel: "image-model"
+  geminiVisionModel: "vision-model"
 };
 
 const validVisionJson = JSON.stringify({
@@ -82,68 +80,4 @@ describe("geminiService", () => {
     });
   });
 
-  it("uses source image MIME when generating mayonnaise image", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      async json() {
-        return {
-          candidates: [
-            {
-              content: {
-                parts: [
-                  {
-                    inlineData: {
-                      mimeType: "image/png",
-                      data: "generated-image"
-                    }
-                  }
-                ]
-              }
-            }
-          ]
-        };
-      }
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    const service = createGeminiService(env);
-    const result = await service.generateMayonnaiseImage({
-      sourceImageBase64: "source-base64",
-      sourceImageMimeType: "image/jpeg",
-      maskBase64: "mask-base64"
-    });
-
-    expect(result).toBe("generated-image");
-    const [, requestConfig] = fetchMock.mock.calls[0];
-    const body = JSON.parse(requestConfig.body);
-    expect(body.contents[0].parts[1].inlineData.mimeType).toBe("image/jpeg");
-    expect(body.contents[0].parts[2].inlineData.mimeType).toBe("image/png");
-  });
-
-  it("throws typed error when generation response has no image", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      async json() {
-        return { candidates: [] };
-      }
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    const service = createGeminiService(env);
-
-    try {
-      await service.generateMayonnaiseImage({
-        sourceImageBase64: "source-base64",
-        sourceImageMimeType: "image/png",
-        maskBase64: "mask-base64"
-      });
-      throw new Error("Expected generation to fail.");
-    } catch (error) {
-      expect(error).toBeInstanceOf(HttpError);
-      expect(error).toMatchObject({
-        statusCode: 502,
-        code: "IMAGE_RESPONSE_EMPTY"
-      });
-    }
-  });
 });

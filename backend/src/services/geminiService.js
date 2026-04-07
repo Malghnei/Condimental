@@ -17,9 +17,6 @@ Return strictly valid JSON with this exact schema and no additional keys:
 }
 `.trim();
 
-const mayoPrompt =
-  "Add a large, realistic, and shiny dollop of mayonnaise directly on top of the main subject of this image.";
-
 function buildEndpoint(model, apiKey) {
   return `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 }
@@ -28,19 +25,6 @@ function extractText(candidates) {
   const parts = candidates?.[0]?.content?.parts ?? [];
   const textPart = parts.find((part) => typeof part.text === "string");
   return textPart?.text ?? "";
-}
-
-function extractImageInlineData(candidates) {
-  for (const candidate of candidates ?? []) {
-    const parts = candidate?.content?.parts ?? [];
-    const imagePart = parts.find(
-      (part) => part.inlineData?.mimeType?.startsWith("image/")
-    );
-    if (imagePart?.inlineData?.data) {
-      return imagePart.inlineData.data;
-    }
-  }
-  return null;
 }
 
 function parseVisionJson(rawText) {
@@ -60,22 +44,9 @@ function parseVisionJson(rawText) {
   return JSON.parse(payload);
 }
 
-function summarizeCandidates(candidates) {
-  return (candidates ?? []).map((candidate, index) => {
-    const parts = candidate?.content?.parts ?? [];
-    return {
-      index,
-      finishReason: candidate?.finishReason ?? null,
-      safetyRatings: candidate?.safetyRatings ?? [],
-      partKinds: parts.map((part) => {
-        if (typeof part?.text === "string") return "text";
-        if (part?.inlineData?.mimeType) return `inline:${part.inlineData.mimeType}`;
-        return "unknown";
-      })
-    };
-  });
-}
-
+/**
+ * Gemini-only vision service (mayo scoring, bounding box). Image generation is handled separately.
+ */
 export function createGeminiService(env) {
   async function analyzeVision(imageBase64, imageMimeType) {
     let response;
@@ -163,102 +134,7 @@ export function createGeminiService(env) {
     }
   }
 
-  async function generateMayonnaiseImage({
-    sourceImageBase64,
-    sourceImageMimeType,
-    maskBase64
-  }) {
-    let response;
-    try {
-      response = await fetch(
-        buildEndpoint(env.geminiImageModel, env.geminiApiKey),
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [
-              {
-                role: "user",
-                parts: [
-                  { text: mayoPrompt },
-                  {
-                    inlineData: {
-                      mimeType: sourceImageMimeType,
-                      data: sourceImageBase64
-                    }
-                  },
-                  {
-                    inlineData: {
-                      mimeType: "image/png",
-                      data: maskBase64
-                    }
-                  }
-                ]
-              }
-            ],
-            generationConfig: {
-              responseModalities: ["TEXT", "IMAGE"]
-            }
-          })
-        }
-      );
-    } catch (error) {
-      throw new HttpError({
-        statusCode: 502,
-        publicMessage: "Image generation failed.",
-        code: "IMAGE_API_UNAVAILABLE",
-        cause: error
-      });
-    }
-
-    if (!response.ok) {
-      let apiErrorBody = "";
-      try {
-        apiErrorBody = await response.text();
-      } catch {
-        apiErrorBody = "";
-      }
-      throw new HttpError({
-        statusCode: 502,
-        publicMessage: "Image generation failed.",
-        code: "IMAGE_API_FAILED",
-        cause: {
-          status: response.status,
-          body: apiErrorBody.slice(0, 800)
-        }
-      });
-    }
-
-    let result;
-    try {
-      result = await response.json();
-    } catch (error) {
-      throw new HttpError({
-        statusCode: 502,
-        publicMessage: "Image generation failed.",
-        code: "IMAGE_RESPONSE_INVALID_JSON",
-        cause: error
-      });
-    }
-
-    const generatedBase64 = extractImageInlineData(result.candidates);
-
-    if (!generatedBase64) {
-      throw new HttpError({
-        statusCode: 502,
-        publicMessage: "Image generation failed.",
-        code: "IMAGE_RESPONSE_EMPTY",
-        cause: {
-          candidates: summarizeCandidates(result.candidates)
-        }
-      });
-    }
-
-    return generatedBase64;
-  }
-
   return {
-    analyzeVision,
-    generateMayonnaiseImage
+    analyzeVision
   };
 }
