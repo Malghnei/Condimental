@@ -32,8 +32,9 @@ describe("huggingFaceImageService", () => {
 
     expect(result).toBe(Buffer.from(pngBytes).toString("base64"));
     const [url, requestConfig] = fetchMock.mock.calls[0];
-    expect(url).toMatch(/^https:\/\/router\.huggingface\.co\/hf-inference\/models\//);
-    expect(url).toContain(encodeURIComponent("timbrooks/instruct-pix2pix"));
+    expect(url).toBe(
+      "https://router.huggingface.co/hf-inference/models/timbrooks/instruct-pix2pix"
+    );
     expect(requestConfig.headers.Authorization).toBe("Bearer hf-test-token");
     const body = JSON.parse(requestConfig.body);
     expect(body.inputs).toBe("source-base64");
