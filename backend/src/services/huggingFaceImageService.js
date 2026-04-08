@@ -1,12 +1,9 @@
-import { InferenceClient } from "@huggingface/inference";
 import { HttpError } from "../errors/httpErrors.js";
 
 const mayoPrompt =
   "Add a large, realistic, and shiny dollop of mayonnaise directly on top of the main subject of this image.";
 
 export function createHuggingFaceImageService(env) {
-  const hf = new InferenceClient(env.hfApiKey);
-
   async function generateMayonnaiseImage({
     sourceImageBase64,
     sourceImageMimeType,
@@ -24,30 +21,47 @@ export function createHuggingFaceImageService(env) {
       });
     }
 
-    const mimeType = sourceImageMimeType || "image/png";
-    const imageBlob = new Blob([imageBuffer], { type: mimeType });
-
     try {
-      const resultBlob = await hf.imageToImage({
-        model: env.hfImageModel,
-        inputs: imageBlob,
-        parameters: {
-          prompt: mayoPrompt,
-          image_guidance_scale: 1.5,
-          guidance_scale: 7
+      const response = await fetch(
+        `https://api.cloudflare.com/client/v4/accounts/${env.cfAccountId}/ai/run/${env.cfImageModel}`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${env.cfApiToken}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            prompt: mayoPrompt,
+            image: Array.from(imageBuffer),
+            strength: env.cfImg2ImgStrength,
+            guidance: env.cfImg2ImgGuidance
+          })
         }
-      });
+      );
 
-      if (!(resultBlob instanceof Blob)) {
+      if (!response.ok) {
+        const detail = await response.text();
+        throw new HttpError({
+          statusCode: 502,
+          publicMessage: "Image generation failed.",
+          code: "IMAGE_API_FAILED",
+          cause: {
+            detail,
+            status: response.status
+          }
+        });
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      if (!arrayBuffer.byteLength) {
         throw new HttpError({
           statusCode: 502,
           publicMessage: "Image generation failed.",
           code: "IMAGE_RESPONSE_EMPTY",
-          cause: { detail: "Expected Blob from imageToImage" }
+          cause: { detail: "Empty response image payload" }
         });
       }
 
-      const arrayBuffer = await resultBlob.arrayBuffer();
       return Buffer.from(arrayBuffer).toString("base64");
     } catch (error) {
       if (error instanceof HttpError) {

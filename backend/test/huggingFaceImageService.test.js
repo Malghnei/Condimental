@@ -1,34 +1,35 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { HttpError } from "../src/errors/httpErrors.js";
 
-const mockImageToImage = vi.hoisted(() => vi.fn());
-
-vi.mock("@huggingface/inference", () => ({
-  InferenceClient: class {
-    constructor() {
-      this.imageToImage = mockImageToImage;
-    }
-  }
-}));
-
 import { createHuggingFaceImageService } from "../src/services/huggingFaceImageService.js";
 
 const env = {
-  hfApiKey: "hf-test-token",
-  hfImageModel: "timbrooks/instruct-pix2pix"
+  cfAccountId: "cf-account",
+  cfApiToken: "cf-token",
+  cfImageModel: "@cf/runwayml/stable-diffusion-v1-5-img2img",
+  cfImg2ImgStrength: 0.5,
+  cfImg2ImgGuidance: 7.5
 };
 
 const pngBytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+const fetchMock = vi.fn();
+
+function bytesToArrayBuffer(bytes) {
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+}
 
 afterEach(() => {
   vi.clearAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("huggingFaceImageService", () => {
-  it("returns base64 from imageToImage Blob result", async () => {
-    mockImageToImage.mockResolvedValue(
-      new Blob([pngBytes], { type: "image/png" })
-    );
+  it("returns base64 from Cloudflare img2img binary response", async () => {
+    vi.stubGlobal("fetch", fetchMock);
+    fetchMock.mockResolvedValue({
+      ok: true,
+      arrayBuffer: vi.fn().mockResolvedValue(bytesToArrayBuffer(pngBytes))
+    });
 
     const service = createHuggingFaceImageService(env);
     const result = await service.generateMayonnaiseImage({
@@ -38,18 +39,29 @@ describe("huggingFaceImageService", () => {
     });
 
     expect(result).toBe(Buffer.from(pngBytes).toString("base64"));
-    expect(mockImageToImage).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
 
-    const call = mockImageToImage.mock.calls[0][0];
-    expect(call.model).toBe("timbrooks/instruct-pix2pix");
-    expect(call.inputs).toBeInstanceOf(Blob);
-    expect(call.parameters.prompt).toContain("mayonnaise");
-    expect(call.parameters.image_guidance_scale).toBe(1.5);
-    expect(call.parameters.guidance_scale).toBe(7);
+    const [url, options] = fetchMock.mock.calls[0];
+    expect(url).toBe(
+      "https://api.cloudflare.com/client/v4/accounts/cf-account/ai/run/@cf/runwayml/stable-diffusion-v1-5-img2img"
+    );
+    expect(options.method).toBe("POST");
+    expect(options.headers.Authorization).toBe("Bearer cf-token");
+
+    const payload = JSON.parse(options.body);
+    expect(payload.prompt).toContain("mayonnaise");
+    expect(payload.image).toEqual(Array.from(Buffer.from("hello")));
+    expect(payload.strength).toBe(0.5);
+    expect(payload.guidance).toBe(7.5);
   });
 
-  it("maps SDK failures to IMAGE_API_FAILED", async () => {
-    mockImageToImage.mockRejectedValue(new Error("Model error"));
+  it("maps Cloudflare API non-2xx responses to IMAGE_API_FAILED", async () => {
+    vi.stubGlobal("fetch", fetchMock);
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 429,
+      text: vi.fn().mockResolvedValue("Rate limit")
+    });
 
     const service = createHuggingFaceImageService(env);
 
@@ -65,8 +77,12 @@ describe("huggingFaceImageService", () => {
     });
   });
 
-  it("throws typed error when imageToImage returns non-Blob", async () => {
-    mockImageToImage.mockResolvedValue(null);
+  it("throws typed error when Cloudflare returns an empty payload", async () => {
+    vi.stubGlobal("fetch", fetchMock);
+    fetchMock.mockResolvedValue({
+      ok: true,
+      arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(0))
+    });
 
     const service = createHuggingFaceImageService(env);
 

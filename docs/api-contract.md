@@ -54,7 +54,7 @@ Partial response when generation fails:
 }
 ```
 
-Image generation uses the Hugging Face Inference API (`timbrooks/instruct-pix2pix` by default). The mask built server-side is not sent to that model; editing is driven by a fixed text instruction plus the source image.
+Image generation uses Cloudflare Workers AI img2img (`@cf/runwayml/stable-diffusion-v1-5-img2img` by default). The mask built server-side is currently not sent to the model; editing is driven by a fixed text instruction plus the source image.
 
 Error responses:
 

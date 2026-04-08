@@ -7,7 +7,7 @@ Condimental is a webcam-based demo app that:
 - captures a frame in a React frontend,
 - runs Gemini Vision analysis for object + mayo score + review + bounding box,
 - generates a mask in memory with `sharp`,
-- requests Hugging Face image generation (`timbrooks/instruct-pix2pix`) for mayonnaise-style editing,
+- requests Cloudflare Workers AI image generation (`@cf/runwayml/stable-diffusion-v1-5-img2img`) for mayonnaise-style editing,
 - returns side-by-side original and augmented results.
 
 ## Project Structure
@@ -22,7 +22,7 @@ Condimental is a webcam-based demo app that:
 - Node.js 20+
 - npm 10+
 - Gemini API key (vision)
-- Hugging Face API token with Inference API access (image generation)
+- Cloudflare account + Workers AI API token (image generation)
 
 ## Environment Variables
 
@@ -33,8 +33,13 @@ PORT=3001
 FRONTEND_ORIGIN=http://localhost:5173
 GEMINI_API_KEY=your_gemini_key_here
 GEMINI_VISION_MODEL=gemini-2.5-flash
-HF_API_KEY=your_huggingface_token_here
-HF_IMAGE_MODEL=timbrooks/instruct-pix2pix
+CF_ACCOUNT_ID=your_cloudflare_account_id
+CF_API_TOKEN=your_cloudflare_api_token
+
+# Optional image-generation tuning
+CF_IMAGE_MODEL=@cf/runwayml/stable-diffusion-v1-5-img2img
+CF_IMG2IMG_STRENGTH=0.5
+CF_IMG2IMG_GUIDANCE=7.5
 ```
 
 Optional for frontend (`frontend/.env`):
@@ -132,7 +137,7 @@ Response body (`status: complete | partial`):
   Verify `GEMINI_API_KEY` and `GEMINI_VISION_MODEL` in `backend/.env`.
 
 - **`Image generation failed` / partial result with no augmented image**  
-  Verify `HF_API_KEY` and that the account can call Inference API for `HF_IMAGE_MODEL` (default `timbrooks/instruct-pix2pix`). Cold-start or rate limits may require a retry.
+  Verify `CF_ACCOUNT_ID` and `CF_API_TOKEN`, then check access to Workers AI and model path in `CF_IMAGE_MODEL` (default `@cf/runwayml/stable-diffusion-v1-5-img2img`).
 
 - **CORS errors in browser console**  
   Confirm `FRONTEND_ORIGIN` exactly matches your frontend origin.
