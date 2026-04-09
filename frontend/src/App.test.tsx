@@ -17,6 +17,12 @@ vi.mock("react-webcam", async () => {
   };
 });
 
+vi.mock("./subjectMask", () => ({
+  createSubjectMaskBase64: vi.fn().mockResolvedValue(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+X5QAAAABJRU5ErkJggg=="
+  )
+}));
+
 const successfulPayload = {
   status: "complete",
   originalImageBase64: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB",

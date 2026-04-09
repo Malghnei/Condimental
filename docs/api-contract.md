@@ -6,9 +6,12 @@ Request body:
 
 ```json
 {
-  "imageBase64": "base64-data-or-data-url"
+  "imageBase64": "base64-data-or-data-url",
+  "maskBase64": "optional-raw-base64-png-same-dimensions-as-image"
 }
 ```
+
+`maskBase64` is optional. When omitted, the server builds a mask from the vision bounding box. When provided (for example from in-browser background removal), it must be a PNG whose width and height match the decoded source image.
 
 Successful response:
 

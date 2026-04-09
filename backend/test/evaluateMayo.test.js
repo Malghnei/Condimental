@@ -1,4 +1,5 @@
 import request from "supertest";
+import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 import { createApp } from "../src/app/createApp.js";
 import { HttpError } from "../src/errors/httpErrors.js";
@@ -142,6 +143,49 @@ describe("POST /api/evaluate-mayo", () => {
     });
 
     expect(response.statusCode).toBe(413);
+  });
+
+  it("accepts optional client mask when dimensions match the image", async () => {
+    const app = createApp({
+      env,
+      ...createMockServices()
+    });
+
+    const response = await request(app).post("/api/evaluate-mayo").send({
+      imageBase64: onePixelPngBase64,
+      maskBase64: onePixelPngBase64
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body.status).toBe("complete");
+  });
+
+  it("returns 400 when client mask dimensions do not match the image", async () => {
+    const app = createApp({
+      env,
+      ...createMockServices()
+    });
+
+    const mask2x2Base64 = (
+      await sharp({
+        create: {
+          width: 2,
+          height: 2,
+          channels: 3,
+          background: { r: 255, g: 255, b: 255 }
+        }
+      })
+        .png()
+        .toBuffer()
+    ).toString("base64");
+
+    const response = await request(app).post("/api/evaluate-mayo").send({
+      imageBase64: onePixelPngBase64,
+      maskBase64: mask2x2Base64
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.body.code).toBe("MASK_DIMENSION_MISMATCH");
   });
 
   it("returns 429 when rate limit is exceeded", async () => {

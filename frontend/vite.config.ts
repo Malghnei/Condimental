@@ -5,6 +5,11 @@ import react from "@vitejs/plugin-react";
 export default defineConfig({
   plugins: [react()],
   server: {
+    // Enables SharedArrayBuffer for @imgly/background-removal / onnxruntime-web in dev
+    headers: {
+      "Cross-Origin-Opener-Policy": "same-origin",
+      "Cross-Origin-Embedder-Policy": "require-corp"
+    },
     proxy: {
       "/api": "http://localhost:3001"
     }

@@ -3,7 +3,8 @@ import { z } from "zod";
 const normalizedCoordinate = z.number().min(0).max(1);
 
 export const evaluateRequestSchema = z.object({
-  imageBase64: z.string().min(20, "imageBase64 payload is too small")
+  imageBase64: z.string().min(20, "imageBase64 payload is too small"),
+  maskBase64: z.string().min(20, "maskBase64 payload is too small").optional()
 });
 
 export const visionResultSchema = z.object({

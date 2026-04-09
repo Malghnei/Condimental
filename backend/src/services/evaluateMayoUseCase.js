@@ -1,3 +1,4 @@
+import { HttpError } from "../errors/httpErrors.js";
 import {
   decodeBase64Image,
   getImageDimensions,
@@ -11,7 +12,7 @@ export function createEvaluateMayoUseCase({
   geminiVisionService,
   imageGenerationService
 }) {
-  return async function evaluateMayo({ imageBase64 }) {
+  return async function evaluateMayo({ imageBase64, maskBase64 }) {
     const normalizedImageBase64 = stripDataUrlPrefix(imageBase64);
     const originalImageBuffer = decodeBase64Image(normalizedImageBase64);
     const sourceImageMimeType = await resolveImageMimeType({
@@ -27,11 +28,37 @@ export function createEvaluateMayoUseCase({
     );
     const absoluteBox = normalizedToAbsoluteBox(vision.bounding_box, dimensions);
 
-    const maskBuffer = await buildInpaintMask({
-      width: dimensions.width,
-      height: dimensions.height,
-      box: absoluteBox
-    });
+    let maskBuffer;
+    if (maskBase64) {
+      const normalizedMaskBase64 = stripDataUrlPrefix(maskBase64);
+      const clientMaskBuffer = decodeBase64Image(normalizedMaskBase64);
+      if (!clientMaskBuffer.length) {
+        throw new HttpError({
+          statusCode: 400,
+          publicMessage: "Invalid inpainting mask.",
+          code: "MASK_INVALID"
+        });
+      }
+      const maskDimensions = await getImageDimensions(clientMaskBuffer);
+      if (
+        maskDimensions.width !== dimensions.width ||
+        maskDimensions.height !== dimensions.height
+      ) {
+        throw new HttpError({
+          statusCode: 400,
+          publicMessage:
+            "Mask size must match the source image width and height.",
+          code: "MASK_DIMENSION_MISMATCH"
+        });
+      }
+      maskBuffer = clientMaskBuffer;
+    } else {
+      maskBuffer = await buildInpaintMask({
+        width: dimensions.width,
+        height: dimensions.height,
+        box: absoluteBox
+      });
+    }
 
     try {
       const augmentedImageBase64 =

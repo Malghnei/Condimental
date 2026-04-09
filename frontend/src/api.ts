@@ -22,13 +22,26 @@ export type EvaluateMayoResponse = z.infer<typeof evaluateResponseSchema>;
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3001";
 
+export type EvaluateMayoRequestOptions = {
+  /** Raw base64 PNG mask (no data URL prefix), same dimensions as the image */
+  maskBase64?: string;
+};
+
 export async function evaluateMayoImage(
-  imageBase64DataUrl: string
+  imageBase64DataUrl: string,
+  options: EvaluateMayoRequestOptions = {}
 ): Promise<EvaluateMayoResponse> {
+  const body: Record<string, string> = {
+    imageBase64: imageBase64DataUrl
+  };
+  if (options.maskBase64) {
+    body.maskBase64 = options.maskBase64;
+  }
+
   const response = await fetch(`${apiBaseUrl}/api/evaluate-mayo`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ imageBase64: imageBase64DataUrl })
+    body: JSON.stringify(body)
   });
 
   const payload = await response.json();

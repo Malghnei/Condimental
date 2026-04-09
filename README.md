@@ -42,6 +42,8 @@ CF_IMG2IMG_STRENGTH=0.5
 CF_IMG2IMG_GUIDANCE=7.5
 ```
 
+The frontend uses `@imgly/background-removal` to build an inpainting mask in the browser (with a server-side fallback to the vision bounding-box mask if that step fails).
+
 Optional for frontend (`frontend/.env`):
 
 ```bash
@@ -89,7 +91,8 @@ Request body:
 
 ```json
 {
-  "imageBase64": "data:image/jpeg;base64,..."
+  "imageBase64": "data:image/jpeg;base64,...",
+  "maskBase64": "optional raw base64 PNG (same size as image; from client-side segmentation)"
 }
 ```
 

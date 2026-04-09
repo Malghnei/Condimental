@@ -1,11 +1,13 @@
 import { type ChangeEvent, type DragEvent, useMemo, useRef, useState } from "react";
 import Webcam from "react-webcam";
 import { evaluateMayoImage, type EvaluateMayoResponse } from "./api";
+import { createSubjectMaskBase64 } from "./subjectMask";
 import "./App.css";
 
 type UiState =
   | "idle"
   | "capturing"
+  | "segmenting_subject"
   | "analyzing_vision"
   | "generating_mayo"
   | "result";
@@ -25,10 +27,17 @@ function App() {
   const [pendingUpload, setPendingUpload] = useState<string | null>(null);
   const [isDragActive, setIsDragActive] = useState(false);
 
-  const busy = uiState === "capturing" || uiState === "analyzing_vision" || uiState === "generating_mayo";
+  const busy =
+    uiState === "capturing" ||
+    uiState === "segmenting_subject" ||
+    uiState === "analyzing_vision" ||
+    uiState === "generating_mayo";
   const displayImage = pendingUpload ?? (uiState === "result" ? capturedFrame : null);
 
   const statusLabel = useMemo(() => {
+    if (uiState === "segmenting_subject") {
+      return "Removing background & building mask...";
+    }
     if (uiState === "analyzing_vision") {
       return "Analyzing culinary potential...";
     }
@@ -44,6 +53,18 @@ function App() {
     setUiState("capturing");
     setCapturedFrame(imageDataUrl);
     setPendingUpload(null);
+    setUiState("segmenting_subject");
+
+    let maskBase64: string | undefined;
+    try {
+      maskBase64 = await createSubjectMaskBase64(imageDataUrl);
+    } catch (segmentError) {
+      console.warn(
+        "Background removal failed; server will fall back to vision bbox mask.",
+        segmentError
+      );
+    }
+
     setUiState("analyzing_vision");
 
     let markGenerating = true;
@@ -54,7 +75,9 @@ function App() {
     }, 700);
 
     try {
-      const response = await evaluateMayoImage(imageDataUrl);
+      const response = await evaluateMayoImage(imageDataUrl, {
+        maskBase64
+      });
       setResult(response);
       setUiState("result");
     } catch (requestError) {
