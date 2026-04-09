@@ -54,7 +54,7 @@ Partial response when generation fails:
 }
 ```
 
-Image generation uses Cloudflare Workers AI img2img (`@cf/runwayml/stable-diffusion-v1-5-img2img` by default). The mask built server-side is currently not sent to the model; editing is driven by a fixed text instruction plus the source image.
+Image generation uses Cloudflare Workers AI inpainting (`@cf/runwayml/stable-diffusion-v1-5-inpainting` by default). The server builds a mask PNG from the vision bounding box and sends it with the source image and a fixed mayonnaise prompt.
 
 Error responses:
 

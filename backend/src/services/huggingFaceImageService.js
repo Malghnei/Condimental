@@ -6,10 +6,10 @@ const mayoPrompt =
 export function createHuggingFaceImageService(env) {
   async function generateMayonnaiseImage({
     sourceImageBase64,
-    sourceImageMimeType,
-    maskBase64: _maskBase64
+    sourceImageMimeType: _sourceImageMimeType,
+    maskBase64
   }) {
-    void _maskBase64;
+    void _sourceImageMimeType;
 
     const imageBuffer = Buffer.from(sourceImageBase64, "base64");
     if (!imageBuffer.length) {
@@ -18,6 +18,16 @@ export function createHuggingFaceImageService(env) {
         publicMessage: "Image generation failed.",
         code: "IMAGE_API_FAILED",
         cause: { detail: "Empty source image" }
+      });
+    }
+
+    const maskBuffer = Buffer.from(maskBase64, "base64");
+    if (!maskBuffer.length) {
+      throw new HttpError({
+        statusCode: 502,
+        publicMessage: "Image generation failed.",
+        code: "IMAGE_API_FAILED",
+        cause: { detail: "Empty inpainting mask" }
       });
     }
 
@@ -33,6 +43,7 @@ export function createHuggingFaceImageService(env) {
           body: JSON.stringify({
             prompt: mayoPrompt,
             image: Array.from(imageBuffer),
+            mask: Array.from(maskBuffer),
             strength: env.cfImg2ImgStrength,
             guidance: env.cfImg2ImgGuidance
           })

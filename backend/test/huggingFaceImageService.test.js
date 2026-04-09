@@ -6,10 +6,13 @@ import { createHuggingFaceImageService } from "../src/services/huggingFaceImageS
 const env = {
   cfAccountId: "cf-account",
   cfApiToken: "cf-token",
-  cfImageModel: "@cf/runwayml/stable-diffusion-v1-5-img2img",
+  cfImageModel: "@cf/runwayml/stable-diffusion-v1-5-inpainting",
   cfImg2ImgStrength: 0.5,
   cfImg2ImgGuidance: 7.5
 };
+
+const maskPngBytes = new Uint8Array([137, 80, 78, 71, 2, 2, 2, 2]);
+const maskBase64 = Buffer.from(maskPngBytes).toString("base64");
 
 const pngBytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
 const fetchMock = vi.fn();
@@ -24,7 +27,7 @@ afterEach(() => {
 });
 
 describe("huggingFaceImageService", () => {
-  it("returns base64 from Cloudflare img2img binary response", async () => {
+  it("returns base64 from Cloudflare inpainting binary response", async () => {
     vi.stubGlobal("fetch", fetchMock);
     fetchMock.mockResolvedValue({
       ok: true,
@@ -35,7 +38,7 @@ describe("huggingFaceImageService", () => {
     const result = await service.generateMayonnaiseImage({
       sourceImageBase64: Buffer.from("hello").toString("base64"),
       sourceImageMimeType: "image/png",
-      maskBase64: "mask-base64"
+      maskBase64
     });
 
     expect(result).toBe(Buffer.from(pngBytes).toString("base64"));
@@ -43,7 +46,7 @@ describe("huggingFaceImageService", () => {
 
     const [url, options] = fetchMock.mock.calls[0];
     expect(url).toBe(
-      "https://api.cloudflare.com/client/v4/accounts/cf-account/ai/run/@cf/runwayml/stable-diffusion-v1-5-img2img"
+      "https://api.cloudflare.com/client/v4/accounts/cf-account/ai/run/@cf/runwayml/stable-diffusion-v1-5-inpainting"
     );
     expect(options.method).toBe("POST");
     expect(options.headers.Authorization).toBe("Bearer cf-token");
@@ -51,6 +54,7 @@ describe("huggingFaceImageService", () => {
     const payload = JSON.parse(options.body);
     expect(payload.prompt).toContain("mayonnaise");
     expect(payload.image).toEqual(Array.from(Buffer.from("hello")));
+    expect(payload.mask).toEqual(Array.from(maskPngBytes));
     expect(payload.strength).toBe(0.5);
     expect(payload.guidance).toBe(7.5);
   });
@@ -69,7 +73,7 @@ describe("huggingFaceImageService", () => {
       service.generateMayonnaiseImage({
         sourceImageBase64: Buffer.from("x").toString("base64"),
         sourceImageMimeType: "image/png",
-        maskBase64: "mask-base64"
+        maskBase64
       })
     ).rejects.toMatchObject({
       statusCode: 502,
@@ -90,7 +94,7 @@ describe("huggingFaceImageService", () => {
       await service.generateMayonnaiseImage({
         sourceImageBase64: Buffer.from("x").toString("base64"),
         sourceImageMimeType: "image/png",
-        maskBase64: "mask-base64"
+        maskBase64
       });
       throw new Error("Expected generation to fail.");
     } catch (error) {
@@ -100,5 +104,20 @@ describe("huggingFaceImageService", () => {
         code: "IMAGE_RESPONSE_EMPTY"
       });
     }
+  });
+
+  it("rejects empty inpainting mask", async () => {
+    const service = createHuggingFaceImageService(env);
+
+    await expect(
+      service.generateMayonnaiseImage({
+        sourceImageBase64: Buffer.from("x").toString("base64"),
+        sourceImageMimeType: "image/png",
+        maskBase64: ""
+      })
+    ).rejects.toMatchObject({
+      statusCode: 502,
+      code: "IMAGE_API_FAILED"
+    });
   });
 });

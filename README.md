@@ -7,7 +7,7 @@ Condimental is a webcam-based demo app that:
 - captures a frame in a React frontend,
 - runs Gemini Vision analysis for object + mayo score + review + bounding box,
 - generates a mask in memory with `sharp`,
-- requests Cloudflare Workers AI image generation (`@cf/runwayml/stable-diffusion-v1-5-img2img`) for mayonnaise-style editing,
+- requests Cloudflare Workers AI inpainting (`@cf/runwayml/stable-diffusion-v1-5-inpainting`) for mayonnaise-style editing,
 - returns side-by-side original and augmented results.
 
 ## Project Structure
@@ -37,7 +37,7 @@ CF_ACCOUNT_ID=your_cloudflare_account_id
 CF_API_TOKEN=your_cloudflare_api_token
 
 # Optional image-generation tuning
-CF_IMAGE_MODEL=@cf/runwayml/stable-diffusion-v1-5-img2img
+CF_IMAGE_MODEL=@cf/runwayml/stable-diffusion-v1-5-inpainting
 CF_IMG2IMG_STRENGTH=0.5
 CF_IMG2IMG_GUIDANCE=7.5
 ```
@@ -137,7 +137,7 @@ Response body (`status: complete | partial`):
   Verify `GEMINI_API_KEY` and `GEMINI_VISION_MODEL` in `backend/.env`.
 
 - **`Image generation failed` / partial result with no augmented image**  
-  Verify `CF_ACCOUNT_ID` and `CF_API_TOKEN`, then check access to Workers AI and model path in `CF_IMAGE_MODEL` (default `@cf/runwayml/stable-diffusion-v1-5-img2img`).
+  Verify `CF_ACCOUNT_ID` and `CF_API_TOKEN`, then check access to Workers AI and model path in `CF_IMAGE_MODEL` (default `@cf/runwayml/stable-diffusion-v1-5-inpainting`).
 
 - **CORS errors in browser console**  
   Confirm `FRONTEND_ORIGIN` exactly matches your frontend origin.

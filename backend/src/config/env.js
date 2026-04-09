@@ -18,7 +18,8 @@ export function getEnv() {
     cfAccountId: process.env.CF_ACCOUNT_ID ?? "",
     cfApiToken: process.env.CF_API_TOKEN ?? "",
     cfImageModel:
-      process.env.CF_IMAGE_MODEL ?? "@cf/runwayml/stable-diffusion-v1-5-img2img",
+      process.env.CF_IMAGE_MODEL ??
+      "@cf/runwayml/stable-diffusion-v1-5-inpainting",
     cfImg2ImgStrength: Number.isFinite(cfImg2ImgStrength) ? cfImg2ImgStrength : 0.5,
     cfImg2ImgGuidance: Number.isFinite(cfImg2ImgGuidance) ? cfImg2ImgGuidance : 7.5,
     hasMissingRequired: missing.length > 0,
