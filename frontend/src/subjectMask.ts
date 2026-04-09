@@ -22,6 +22,18 @@ function blobToRawBase64(blob: Blob): Promise<string> {
   });
 }
 
+function canvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((b) => {
+      if (b) {
+        resolve(b);
+        return;
+      }
+      reject(new Error("Failed to encode mask PNG."));
+    }, "image/png");
+  });
+}
+
 function loadHtmlImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -32,6 +44,20 @@ function loadHtmlImage(src: string): Promise<HTMLImageElement> {
 }
 
 const ALPHA_THRESHOLD = 32;
+const MAX_SEGMENTATION_SIDE = 1024;
+const MAX_MASK_OUTPUT_PIXELS = 6_000_000;
+
+export function getSegmentationDimensions(width: number, height: number) {
+  const maxSide = Math.max(width, height);
+  if (maxSide <= MAX_SEGMENTATION_SIDE) {
+    return { width, height };
+  }
+  const scale = MAX_SEGMENTATION_SIDE / maxSide;
+  return {
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale))
+  };
+}
 
 /**
  * Removes the background in-browser, then builds a grayscale PNG mask from the
@@ -39,28 +65,47 @@ const ALPHA_THRESHOLD = 32;
  * source image for Cloudflare inpainting.
  */
 export async function createSubjectMaskBase64(imageDataUrl: string): Promise<string> {
-  const foregroundBlob = await removeBackground(imageDataUrl, {
-    output: { format: "image/png" }
-  });
-
-  const [sourceImage, fgBitmap] = await Promise.all([
-    loadHtmlImage(imageDataUrl),
-    createImageBitmap(foregroundBlob)
-  ]);
+  const sourceImage = await loadHtmlImage(imageDataUrl);
 
   const width = sourceImage.naturalWidth;
   const height = sourceImage.naturalHeight;
+  if (width * height > MAX_MASK_OUTPUT_PIXELS) {
+    throw new Error("Image is too large for in-browser background removal.");
+  }
+
+  const segmentationSize = getSegmentationDimensions(width, height);
+  let segmentationInput = imageDataUrl;
+  if (
+    segmentationSize.width !== width ||
+    segmentationSize.height !== height
+  ) {
+    const resizeCanvas = document.createElement("canvas");
+    resizeCanvas.width = segmentationSize.width;
+    resizeCanvas.height = segmentationSize.height;
+    const resizeCtx = resizeCanvas.getContext("2d");
+    if (!resizeCtx) {
+      throw new Error("Canvas 2D context is not available.");
+    }
+    resizeCtx.drawImage(sourceImage, 0, 0, segmentationSize.width, segmentationSize.height);
+    segmentationInput = resizeCanvas.toDataURL("image/png");
+  }
+
+  const foregroundBlob = await removeBackground(segmentationInput, {
+    output: { format: "image/png" }
+  });
+
+  const fgBitmap = await createImageBitmap(foregroundBlob);
 
   const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
+  canvas.width = segmentationSize.width;
+  canvas.height = segmentationSize.height;
   const ctx = canvas.getContext("2d");
   if (!ctx) {
     fgBitmap.close();
     throw new Error("Canvas 2D context is not available.");
   }
 
-  ctx.drawImage(fgBitmap, 0, 0, width, height);
+  ctx.drawImage(fgBitmap, 0, 0, segmentationSize.width, segmentationSize.height);
   fgBitmap.close();
 
   const imageData = ctx.getImageData(0, 0, width, height);
@@ -75,15 +120,17 @@ export async function createSubjectMaskBase64(imageDataUrl: string): Promise<str
   }
   ctx.putImageData(imageData, 0, 0);
 
-  const pngBlob = await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob((b) => {
-      if (b) {
-        resolve(b);
-        return;
-      }
-      reject(new Error("Failed to encode mask PNG."));
-    }, "image/png");
-  });
+  const outputCanvas = document.createElement("canvas");
+  outputCanvas.width = width;
+  outputCanvas.height = height;
+  const outputCtx = outputCanvas.getContext("2d");
+  if (!outputCtx) {
+    throw new Error("Canvas 2D context is not available.");
+  }
+  outputCtx.imageSmoothingEnabled = false;
+  outputCtx.drawImage(canvas, 0, 0, width, height);
+
+  const pngBlob = await canvasToPngBlob(outputCanvas);
 
   return blobToRawBase64(pngBlob);
 }
