@@ -6,7 +6,7 @@ import { createHuggingFaceImageService } from "../src/services/huggingFaceImageS
 const env = {
   cfAccountId: "cf-account",
   cfApiToken: "cf-token",
-  cfImageModel: "@cf/runwayml/stable-diffusion-v1-5-inpainting",
+  cfImageModel: "@cf/lykon/dreamshaper-8-lcm",
   cfImg2ImgStrength: 0.5,
   cfImg2ImgGuidance: 7.5
 };
@@ -27,7 +27,7 @@ afterEach(() => {
 });
 
 describe("huggingFaceImageService", () => {
-  it("returns base64 from Cloudflare inpainting binary response", async () => {
+  it("returns base64 from Cloudflare dreamshaper img2img binary response", async () => {
     vi.stubGlobal("fetch", fetchMock);
     fetchMock.mockResolvedValue({
       ok: true,
@@ -46,7 +46,7 @@ describe("huggingFaceImageService", () => {
 
     const [url, options] = fetchMock.mock.calls[0];
     expect(url).toBe(
-      "https://api.cloudflare.com/client/v4/accounts/cf-account/ai/run/@cf/runwayml/stable-diffusion-v1-5-inpainting"
+      "https://api.cloudflare.com/client/v4/accounts/cf-account/ai/run/@cf/lykon/dreamshaper-8-lcm"
     );
     expect(options.method).toBe("POST");
     expect(options.headers.Authorization).toBe("Bearer cf-token");

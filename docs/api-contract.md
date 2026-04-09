@@ -57,7 +57,7 @@ Partial response when generation fails:
 }
 ```
 
-Image generation uses Cloudflare Workers AI inpainting (`@cf/runwayml/stable-diffusion-v1-5-inpainting` by default). The server builds a mask PNG from the vision bounding box and sends it with the source image and a fixed mayonnaise prompt.
+Image generation uses Cloudflare Workers AI (`@cf/lykon/dreamshaper-8-lcm` by default) with img2img + inpainting-style inputs: source image, optional client mask, and a fixed mayonnaise prompt. Without a client mask, the server builds a mask PNG from the vision bounding box.
 
 Error responses:
 
